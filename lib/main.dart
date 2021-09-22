@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'components/nitendo-switch/on_sales_list.dart';
 import 'pages/Main_Page.dart';
 
 void main() {

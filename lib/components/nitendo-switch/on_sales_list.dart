@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import '../../services/API_manager.dart';
 import '../../services/onsales_request.dart';
 import '../../models/nintendo-switch/onsales.dart';
-import 'dart:convert';
 import '../loading_indicator.dart';
 
 const MONTHS = <int, String>{
@@ -27,7 +27,7 @@ String jsTimeToReadable(dateString) {
 }
 
 // Animated List key
-GlobalKey<AnimatedListState> _animated_KEY = GlobalKey<AnimatedListState>();
+GlobalKey<AnimatedListState> _animatedKey = GlobalKey<AnimatedListState>();
 
 class OnSalesList extends StatefulWidget {
   @override
@@ -35,7 +35,7 @@ class OnSalesList extends StatefulWidget {
 }
 
 class _OnSalesListState extends State<OnSalesList> {
-  API_Manager api = new API_Manager();
+  APIManager api = new APIManager();
 
   // At the beginning, we fetch the first 20 posts
   int _page = 0;
@@ -57,6 +57,9 @@ class _OnSalesListState extends State<OnSalesList> {
   // This holds the posts fetched from the server
   List _games = [];
 
+  // The controller for the ListView
+  late ScrollController _scrollController;
+
   void _firstLoad() async {
     setState(() {
       _isFirstLoadRunning = true;
@@ -73,7 +76,6 @@ class _OnSalesListState extends State<OnSalesList> {
 
     _insertListItem().then((value) => {
           setState(() {
-            print("Attempt");
             _isInsertingToList = false;
           })
         });
@@ -84,7 +86,7 @@ class _OnSalesListState extends State<OnSalesList> {
         !_isFirstLoadRunning &&
         !_isLoadMoreRunning &&
         !_isInsertingToList &&
-        _controller.position.extentAfter < 10) {
+        _scrollController.position.extentAfter < 10) {
       setState(() {
         _isLoadMoreRunning = true; // Display a progress indicator at the bottom
       });
@@ -107,7 +109,6 @@ class _OnSalesListState extends State<OnSalesList> {
 
       _insertListItem().then((value) => {
             setState(() {
-              print("Attempt");
               _isInsertingToList = false;
             })
           });
@@ -116,12 +117,18 @@ class _OnSalesListState extends State<OnSalesList> {
 
   Future<void> _insertListItem() async {
     // Trigger Animated List
-    for (int offset = 0; offset < _limit; offset++) {
-      int index_To_Insert = _games.length - _limit + offset;
-      print("Add to : $index_To_Insert");
+    _isInsertingToList = true;
+
+    int offset = 0;
+    while (offset < _limit && _isInsertingToList) {
+      int indexToInsert = _games.length - _limit + offset;
       await Future.delayed(Duration(milliseconds: 150), () {
-        _animated_KEY.currentState!.insertItem(index_To_Insert);
+        if (_isInsertingToList) {
+          print(indexToInsert);
+          _animatedKey.currentState!.insertItem(indexToInsert);
+        }
       });
+      offset++;
     }
   }
 
@@ -130,24 +137,37 @@ class _OnSalesListState extends State<OnSalesList> {
     _hasNextPage = true;
     _isFirstLoadRunning = false;
     _isLoadMoreRunning = false;
-    _animated_KEY = GlobalKey<AnimatedListState>();
+    _animatedKey = new GlobalKey<AnimatedListState>();
     _games.clear();
     _firstLoad();
   }
 
-  // The controller for the ListView
-  late ScrollController _controller;
+  void onSelectCategory(option) async {
+    if (_optionID == option) {
+      _scrollController.animateTo(0,
+          duration: Duration(milliseconds: 30 * _games.length),
+          curve: Curves.fastOutSlowIn);
+      return;
+    }
+    setState(() {
+      if (_optionID != option && !_isFirstLoadRunning && !_isLoadMoreRunning) {
+        _isInsertingToList = false;
+        _optionID = option;
+        switchCategoryFilter();
+      }
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _controller = new ScrollController()..addListener(_loadMore);
+    _scrollController = new ScrollController()..addListener(_loadMore);
     _firstLoad();
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_loadMore);
+    _scrollController.removeListener(_loadMore);
     super.dispose();
   }
 
@@ -205,35 +225,18 @@ class _OnSalesListState extends State<OnSalesList> {
                       text: "Price High",
                     ),
                     onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.PRICE_HIGH_TO_LOW &&
-                            !_isFirstLoadRunning &&
-                            !_isLoadMoreRunning &&
-                            !_isInsertingToList) {
-                          _optionID = OptionID.PRICE_HIGH_TO_LOW;
-                          switchCategoryFilter();
-                        }
-                      });
+                      onSelectCategory(OptionID.PRICE_HIGH_TO_LOW);
                     },
                   ),
                   GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.PRICE_LOW_TO_HIGH,
-                      text: "Price Low",
-                    ),
-                    onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.PRICE_LOW_TO_HIGH &&
-                            !_isFirstLoadRunning &&
-                            !_isLoadMoreRunning &&
-                            !_isInsertingToList) {
-                          _optionID = OptionID.PRICE_LOW_TO_HIGH;
-                          switchCategoryFilter();
-                        }
-                      });
-                    },
-                  ),
+                      child: CategoryCard(
+                        selectedOptionID: _optionID,
+                        btnOptionID: OptionID.PRICE_LOW_TO_HIGH,
+                        text: "Price Low",
+                      ),
+                      onTap: () {
+                        onSelectCategory(OptionID.PRICE_LOW_TO_HIGH);
+                      }),
                   GestureDetector(
                     child: CategoryCard(
                       selectedOptionID: _optionID,
@@ -241,15 +244,7 @@ class _OnSalesListState extends State<OnSalesList> {
                       text: "Featured",
                     ),
                     onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.FEATURED &&
-                            !_isFirstLoadRunning &&
-                            !_isLoadMoreRunning &&
-                            !_isInsertingToList) {
-                          _optionID = OptionID.FEATURED;
-                          switchCategoryFilter();
-                        }
-                      });
+                      onSelectCategory(OptionID.FEATURED);
                     },
                   ),
                   GestureDetector(
@@ -259,15 +254,7 @@ class _OnSalesListState extends State<OnSalesList> {
                       text: "Title A-Z",
                     ),
                     onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.A_TO_Z &&
-                            !_isFirstLoadRunning &&
-                            !_isLoadMoreRunning &&
-                            !_isInsertingToList) {
-                          _optionID = OptionID.A_TO_Z;
-                          switchCategoryFilter();
-                        }
-                      });
+                      onSelectCategory(OptionID.A_TO_Z);
                     },
                   ),
                   GestureDetector(
@@ -277,15 +264,7 @@ class _OnSalesListState extends State<OnSalesList> {
                       text: "Title Z-A",
                     ),
                     onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.Z_TO_A &&
-                            !_isFirstLoadRunning &&
-                            !_isLoadMoreRunning &&
-                            !_isInsertingToList) {
-                          _optionID = OptionID.Z_TO_A;
-                          switchCategoryFilter();
-                        }
-                      });
+                      onSelectCategory(OptionID.A_TO_Z);
                     },
                   )
                 ],
@@ -297,11 +276,11 @@ class _OnSalesListState extends State<OnSalesList> {
             flex: _isFirstLoadRunning ? 0 : 1,
             child: AnimatedList(
               shrinkWrap: true,
-              controller: _controller,
+              controller: _scrollController,
               padding: EdgeInsets.only(bottom: 20),
               physics: BouncingScrollPhysics(),
               scrollDirection: Axis.vertical,
-              key: _animated_KEY,
+              key: _animatedKey,
               initialItemCount: 0,
               itemBuilder: (BuildContext context, int index,
                   Animation<double> animation) {
@@ -312,7 +291,7 @@ class _OnSalesListState extends State<OnSalesList> {
                         .horizontalHeaderImage
                         .toString()
                         .replaceFirst(
-                            "upload/", "upload/c_fill,f_auto,q_auto,w_360/"),
+                            "upload/", "upload/c_fill,f_auto,q_auto,w_180/"),
                     title: _games[index].title!,
                     publisher: _games[index].publishers.length > 0
                         ? _games[index].publishers[0]!

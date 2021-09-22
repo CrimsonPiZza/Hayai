@@ -4,7 +4,7 @@ import '../constants/nintendo-switch/onsales_strings.dart';
 import '../models/nintendo-switch/onsales.dart';
 import './onsales_request.dart';
 
-class API_Manager {
+class APIManager {
   Future<OnSalesModel> getNSOnSales(NSOnSalesRequestConfig config) async {
     var client = http.Client();
     var onSalesModel = null;
