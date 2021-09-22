@@ -26,6 +26,9 @@ String jsTimeToReadable(dateString) {
   return "${date.year}-${MONTHS[date.month]}-${date.day}";
 }
 
+// Animated List key
+GlobalKey<AnimatedListState> _animated_KEY = GlobalKey<AnimatedListState>();
+
 class OnSalesList extends StatefulWidget {
   @override
   _OnSalesListState createState() => _OnSalesListState();
@@ -48,6 +51,9 @@ class _OnSalesListState extends State<OnSalesList> {
   // Used to display loading indicators when _loadMore function is running
   bool _isLoadMoreRunning = false;
 
+  // Used to display block some actions when _insertListItem() function is running
+  bool _isInsertingToList = false;
+
   // This holds the posts fetched from the server
   List _games = [];
 
@@ -59,17 +65,25 @@ class _OnSalesListState extends State<OnSalesList> {
     final OnSalesModel result = await api
         .getNSOnSales(new NSOnSalesRequestConfig(_page, _limit, _optionID));
     _games = result.data.results;
-    print(JsonEncoder().convert(_games[0].horizontalHeaderImage));
 
     setState(() {
       _isFirstLoadRunning = false;
+      _isInsertingToList = true;
     });
+
+    _insertListItem().then((value) => {
+          setState(() {
+            print("Attempt");
+            _isInsertingToList = false;
+          })
+        });
   }
 
   void _loadMore() async {
     if (_hasNextPage &&
         !_isFirstLoadRunning &&
         !_isLoadMoreRunning &&
+        !_isInsertingToList &&
         _controller.position.extentAfter < 10) {
       setState(() {
         _isLoadMoreRunning = true; // Display a progress indicator at the bottom
@@ -85,10 +99,40 @@ class _OnSalesListState extends State<OnSalesList> {
           _hasNextPage = false;
         });
       }
+
       setState(() {
         _isLoadMoreRunning = false;
+        _isInsertingToList = true;
+      });
+
+      _insertListItem().then((value) => {
+            setState(() {
+              print("Attempt");
+              _isInsertingToList = false;
+            })
+          });
+    }
+  }
+
+  Future<void> _insertListItem() async {
+    // Trigger Animated List
+    for (int offset = 0; offset < _limit; offset++) {
+      int index_To_Insert = _games.length - _limit + offset;
+      print("Add to : $index_To_Insert");
+      await Future.delayed(Duration(milliseconds: 150), () {
+        _animated_KEY.currentState!.insertItem(index_To_Insert);
       });
     }
+  }
+
+  void switchCategoryFilter() {
+    _page = 0;
+    _hasNextPage = true;
+    _isFirstLoadRunning = false;
+    _isLoadMoreRunning = false;
+    _animated_KEY = GlobalKey<AnimatedListState>();
+    _games.clear();
+    _firstLoad();
   }
 
   // The controller for the ListView
@@ -97,16 +141,7 @@ class _OnSalesListState extends State<OnSalesList> {
   @override
   void initState() {
     super.initState();
-    _firstLoad();
     _controller = new ScrollController()..addListener(_loadMore);
-  }
-
-  void switchCategoryFilter() {
-    _page = 0;
-    _hasNextPage = true;
-    _isFirstLoadRunning = false;
-    _isLoadMoreRunning = false;
-    _games.clear();
     _firstLoad();
   }
 
@@ -171,7 +206,10 @@ class _OnSalesListState extends State<OnSalesList> {
                     ),
                     onTap: () {
                       setState(() {
-                        if (_optionID != OptionID.PRICE_HIGH_TO_LOW) {
+                        if (_optionID != OptionID.PRICE_HIGH_TO_LOW &&
+                            !_isFirstLoadRunning &&
+                            !_isLoadMoreRunning &&
+                            !_isInsertingToList) {
                           _optionID = OptionID.PRICE_HIGH_TO_LOW;
                           switchCategoryFilter();
                         }
@@ -187,7 +225,9 @@ class _OnSalesListState extends State<OnSalesList> {
                     onTap: () {
                       setState(() {
                         if (_optionID != OptionID.PRICE_LOW_TO_HIGH &&
-                            !_isLoadMoreRunning) {
+                            !_isFirstLoadRunning &&
+                            !_isLoadMoreRunning &&
+                            !_isInsertingToList) {
                           _optionID = OptionID.PRICE_LOW_TO_HIGH;
                           switchCategoryFilter();
                         }
@@ -203,7 +243,9 @@ class _OnSalesListState extends State<OnSalesList> {
                     onTap: () {
                       setState(() {
                         if (_optionID != OptionID.FEATURED &&
-                            !_isLoadMoreRunning) {
+                            !_isFirstLoadRunning &&
+                            !_isLoadMoreRunning &&
+                            !_isInsertingToList) {
                           _optionID = OptionID.FEATURED;
                           switchCategoryFilter();
                         }
@@ -219,7 +261,9 @@ class _OnSalesListState extends State<OnSalesList> {
                     onTap: () {
                       setState(() {
                         if (_optionID != OptionID.A_TO_Z &&
-                            !_isLoadMoreRunning) {
+                            !_isFirstLoadRunning &&
+                            !_isLoadMoreRunning &&
+                            !_isInsertingToList) {
                           _optionID = OptionID.A_TO_Z;
                           switchCategoryFilter();
                         }
@@ -235,7 +279,9 @@ class _OnSalesListState extends State<OnSalesList> {
                     onTap: () {
                       setState(() {
                         if (_optionID != OptionID.Z_TO_A &&
-                            !_isLoadMoreRunning) {
+                            !_isFirstLoadRunning &&
+                            !_isLoadMoreRunning &&
+                            !_isInsertingToList) {
                           _optionID = OptionID.Z_TO_A;
                           switchCategoryFilter();
                         }
@@ -247,40 +293,41 @@ class _OnSalesListState extends State<OnSalesList> {
             ),
           ),
           // Do not show listview yet, unless first loading is already done
-          _isFirstLoadRunning
-              ? SizedBox.shrink()
-              : Expanded(
-                  child: ListView.builder(
-                    controller: _controller,
-                    padding: EdgeInsets.only(bottom: 20),
-                    physics: BouncingScrollPhysics(),
-                    scrollDirection: Axis.vertical,
-                    itemCount: _games.length,
-                    itemBuilder: (BuildContext context, int index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: _GameList(
-                          thumbnail: _games[index]
-                              .horizontalHeaderImage
-                              .toString()
-                              .replaceFirst("upload/",
-                                  "upload/c_fill,f_auto,q_auto,w_360/"),
-                          title: _games[index].title!,
-                          publisher: _games[index].publishers.length > 0
-                              ? _games[index].publishers[0]!
-                              : _games[index].developers.length > 0
-                                  ? _games[index].developers[0]!
-                                  : "",
-                          price: double.parse(_games[index].msrp.toString()),
-                          salePrice:
-                              double.parse(_games[index].salePrice.toString()),
-                          date: jsTimeToReadable(
-                              _games[index].releaseDateDisplay),
-                        ),
-                      );
-                    },
+          Expanded(
+            flex: _isFirstLoadRunning ? 0 : 1,
+            child: AnimatedList(
+              shrinkWrap: true,
+              controller: _controller,
+              padding: EdgeInsets.only(bottom: 20),
+              physics: BouncingScrollPhysics(),
+              scrollDirection: Axis.vertical,
+              key: _animated_KEY,
+              initialItemCount: 0,
+              itemBuilder: (BuildContext context, int index,
+                  Animation<double> animation) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: _GameList(
+                    thumbnail: _games[index]
+                        .horizontalHeaderImage
+                        .toString()
+                        .replaceFirst(
+                            "upload/", "upload/c_fill,f_auto,q_auto,w_360/"),
+                    title: _games[index].title!,
+                    publisher: _games[index].publishers.length > 0
+                        ? _games[index].publishers[0]!
+                        : _games[index].developers.length > 0
+                            ? _games[index].developers[0]!
+                            : "",
+                    price: double.parse(_games[index].msrp.toString()),
+                    salePrice: double.parse(_games[index].salePrice.toString()),
+                    date: jsTimeToReadable(_games[index].releaseDateDisplay),
+                    animation: animation,
                   ),
-                ),
+                );
+              },
+            ),
+          ),
           // Make the loading indicator centering the screen at first
           _isFirstLoadRunning
               ? Expanded(
@@ -307,9 +354,9 @@ class _OnSalesListState extends State<OnSalesList> {
 class CategoryCard extends StatelessWidget {
   const CategoryCard({
     Key? key,
-    required int this.selectedOptionID,
-    required int this.btnOptionID,
-    required String this.text,
+    required this.selectedOptionID,
+    required this.btnOptionID,
+    required this.text,
   }) : super(key: key);
 
   final int selectedOptionID;
@@ -354,6 +401,7 @@ class _GameList extends StatelessWidget {
     required this.price,
     required this.salePrice,
     required this.date,
+    required this.animation,
   }) : super(key: key);
 
   final String thumbnail;
@@ -362,40 +410,48 @@ class _GameList extends StatelessWidget {
   final double price;
   final double salePrice;
   final String date;
+  final Animation<double> animation;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
-      child: Container(
-        child: SizedBox(
-          height: 96,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: thumbnail != "null"
-                      ? Image.network(
-                          thumbnail,
-                          width: 170,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.asset(
-                          "assets/images/nintendo_thumbnail.png",
-                          width: 170,
-                          fit: BoxFit.cover,
-                        ),
+    return SlideTransition(
+      position: CurvedAnimation(curve: Curves.easeOut, parent: animation)
+          .drive((Tween<Offset>(
+        begin: Offset(1, 0),
+        end: Offset(0, 0),
+      ))),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
+        child: Container(
+          child: SizedBox(
+            height: 96,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: thumbnail != "null"
+                        ? Image.network(
+                            thumbnail,
+                            width: 170,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.asset(
+                            "assets/images/nintendo_thumbnail.png",
+                            width: 170,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
                 ),
-              ),
-              _GameCard(
-                  title: title,
-                  publisher: publisher,
-                  price: price,
-                  salePrice: salePrice,
-                  date: date)
-            ],
+                _GameCard(
+                    title: title,
+                    publisher: publisher,
+                    price: price,
+                    salePrice: salePrice,
+                    date: date)
+              ],
+            ),
           ),
         ),
       ),
