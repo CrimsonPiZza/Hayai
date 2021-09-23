@@ -24,21 +24,16 @@ class _MainPageState extends State<MainPage> {
         title: CustomAppBar(),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          color: Color.fromRGBO(15, 32, 39, 1),
-          // image: DecorationImage(
-          //   image: NetworkImage(
-          //       'https://www.kolpaper.com/wp-content/uploads/2020/11/Zenitsu-Wallpaper-2.jpg'),
-          //   // colorFilter: ColorFilter.mode(Colors.black, BlendMode.darken),
-          //   fit: BoxFit.cover,
-          // ),
-        ),
-        child: Column(
-          children: [
-            Expanded(child: OnSalesList()),
-          ],
-        ),
-      ),
+          decoration: BoxDecoration(
+            color: Color.fromRGBO(15, 32, 39, 1),
+            // image: DecorationImage(
+            //   image: NetworkImage(
+            //       'https://www.kolpaper.com/wp-content/uploads/2020/11/Zenitsu-Wallpaper-2.jpg'),
+            //   // colorFilter: ColorFilter.mode(Colors.black, BlendMode.darken),
+            //   fit: BoxFit.cover,
+            // ),
+          ),
+          child: OnSalesList()),
     );
   }
 }

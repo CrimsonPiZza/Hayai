@@ -176,153 +176,169 @@ class _OnSalesListState extends State<OnSalesList> {
       padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 20),
-                    child: Text(
-                      "Let's buy",
-                      textAlign: TextAlign.left,
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w100),
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 20),
-                    child: Text(
-                      "On Sales",
-                      textAlign: TextAlign.left,
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                )
-              ],
-            ),
-          ),
+          PageHeading(),
           // Category Selector
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: BouncingScrollPhysics(),
-              child: Row(
-                children: <Widget>[
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.PRICE_HIGH_TO_LOW,
-                      text: "Price High",
-                    ),
-                    onTap: () {
-                      onSelectCategory(OptionID.PRICE_HIGH_TO_LOW);
-                    },
-                  ),
-                  GestureDetector(
-                      child: CategoryCard(
-                        selectedOptionID: _optionID,
-                        btnOptionID: OptionID.PRICE_LOW_TO_HIGH,
-                        text: "Price Low",
-                      ),
-                      onTap: () {
-                        onSelectCategory(OptionID.PRICE_LOW_TO_HIGH);
-                      }),
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.FEATURED,
-                      text: "Featured",
-                    ),
-                    onTap: () {
-                      onSelectCategory(OptionID.FEATURED);
-                    },
-                  ),
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.A_TO_Z,
-                      text: "Title A-Z",
-                    ),
-                    onTap: () {
-                      onSelectCategory(OptionID.A_TO_Z);
-                    },
-                  ),
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.Z_TO_A,
-                      text: "Title Z-A",
-                    ),
-                    onTap: () {
-                      onSelectCategory(OptionID.A_TO_Z);
-                    },
-                  )
-                ],
+          CategorySelector(),
+          // Do not show listview yet, unless first loading is already done
+          DisplayZone(),
+          // Make the loading indicator centering the screen at first
+          LoadingIndicator()
+        ],
+      ),
+    );
+  }
+
+  Widget LoadingIndicator() {
+    return _isFirstLoadRunning
+        ? Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: ZenitsuLoadingIndicator(),
+            ),
+          )
+        // Add the loading indicator at the bottom center of the screen when loading more games
+        : _isLoadMoreRunning
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: ZenitsuLoadingIndicator(),
+                ),
+              )
+            : SizedBox.shrink();
+  }
+
+  Expanded DisplayZone() {
+    return Expanded(
+      flex: _isFirstLoadRunning ? 0 : 1,
+      child: AnimatedList(
+        shrinkWrap: true,
+        controller: _scrollController,
+        padding: EdgeInsets.only(bottom: 20),
+        physics: BouncingScrollPhysics(),
+        scrollDirection: Axis.vertical,
+        key: _animatedKey,
+        initialItemCount: 0,
+        itemBuilder:
+            (BuildContext context, int index, Animation<double> animation) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: _GameList(
+              thumbnail: _games[index]
+                  .horizontalHeaderImage
+                  .toString()
+                  .replaceFirst(
+                      "upload/", "upload/c_fill,f_auto,q_auto,w_360/"),
+              title: _games[index].title!,
+              publisher: _games[index].publishers.length > 0
+                  ? _games[index].publishers[0]!
+                  : _games[index].developers.length > 0
+                      ? _games[index].developers[0]!
+                      : "",
+              price: double.parse(_games[index].msrp.toString()),
+              salePrice: double.parse(_games[index].salePrice.toString()),
+              date: jsTimeToReadable(_games[index].releaseDateDisplay),
+              animation: animation,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Padding CategorySelector() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: BouncingScrollPhysics(),
+        child: Row(
+          children: <Widget>[
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.PRICE_HIGH_TO_LOW,
+                text: "Price High",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.PRICE_HIGH_TO_LOW);
+              },
+            ),
+            GestureDetector(
+                child: CategoryCard(
+                  selectedOptionID: _optionID,
+                  btnOptionID: OptionID.PRICE_LOW_TO_HIGH,
+                  text: "Price Low",
+                ),
+                onTap: () {
+                  onSelectCategory(OptionID.PRICE_LOW_TO_HIGH);
+                }),
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.FEATURED,
+                text: "Featured",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.FEATURED);
+              },
+            ),
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.A_TO_Z,
+                text: "Title A-Z",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.A_TO_Z);
+              },
+            ),
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.Z_TO_A,
+                text: "Title Z-A",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.A_TO_Z);
+              },
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Padding PageHeading() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: Text(
+                "Let's buy",
+                textAlign: TextAlign.left,
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w100),
               ),
             ),
           ),
-          // Do not show listview yet, unless first loading is already done
-          Expanded(
-            flex: _isFirstLoadRunning ? 0 : 1,
-            child: AnimatedList(
-              shrinkWrap: true,
-              controller: _scrollController,
-              padding: EdgeInsets.only(bottom: 20),
-              physics: BouncingScrollPhysics(),
-              scrollDirection: Axis.vertical,
-              key: _animatedKey,
-              initialItemCount: 0,
-              itemBuilder: (BuildContext context, int index,
-                  Animation<double> animation) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: _GameList(
-                    thumbnail: _games[index]
-                        .horizontalHeaderImage
-                        .toString()
-                        .replaceFirst(
-                            "upload/", "upload/c_fill,f_auto,q_auto,w_360/"),
-                    title: _games[index].title!,
-                    publisher: _games[index].publishers.length > 0
-                        ? _games[index].publishers[0]!
-                        : _games[index].developers.length > 0
-                            ? _games[index].developers[0]!
-                            : "",
-                    price: double.parse(_games[index].msrp.toString()),
-                    salePrice: double.parse(_games[index].salePrice.toString()),
-                    date: jsTimeToReadable(_games[index].releaseDateDisplay),
-                    animation: animation,
-                  ),
-                );
-              },
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: Text(
+                "On Sales",
+                textAlign: TextAlign.left,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
-          // Make the loading indicator centering the screen at first
-          _isFirstLoadRunning
-              ? Expanded(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: ZenitsuLoadingIndicator(),
-                  ),
-                )
-              // Add the loading indicator at the bottom center of the screen when loading more games
-              : _isLoadMoreRunning
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Center(
-                        child: ZenitsuLoadingIndicator(),
-                      ),
-                    )
-                  : SizedBox.shrink()
+          )
         ],
       ),
     );
