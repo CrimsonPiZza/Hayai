@@ -1,4 +1,4 @@
-package com.example.hayai
+package com.rimuru.hayai
 
 import io.flutter.embedding.android.FlutterActivity
 
