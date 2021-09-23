@@ -17,12 +17,13 @@ class _MainPageState extends State<MainPage> {
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
-        toolbarHeight: 0,
+        leadingWidth: 0,
+        toolbarHeight: 80,
         backgroundColor: Color.fromRGBO(15, 32, 39, 1),
-        brightness: Brightness.dark, // status bar brightness
+        brightness: Brightness.dark, // status bar brightness mode
+        title: CustomAppBar(),
       ),
       body: Container(
-        padding: EdgeInsets.only(top: 20),
         decoration: BoxDecoration(
           color: Color.fromRGBO(15, 32, 39, 1),
           // image: DecorationImage(
@@ -34,7 +35,6 @@ class _MainPageState extends State<MainPage> {
         ),
         child: Column(
           children: [
-            CustomAppBar(),
             Expanded(child: OnSalesList()),
           ],
         ),

@@ -124,7 +124,6 @@ class _OnSalesListState extends State<OnSalesList> {
       int indexToInsert = _games.length - _limit + offset;
       await Future.delayed(Duration(milliseconds: 150), () {
         if (_isInsertingToList) {
-          print(indexToInsert);
           _animatedKey.currentState!.insertItem(indexToInsert);
         }
       });
@@ -174,7 +173,7 @@ class _OnSalesListState extends State<OnSalesList> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 32),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
           Padding(
@@ -291,7 +290,7 @@ class _OnSalesListState extends State<OnSalesList> {
                         .horizontalHeaderImage
                         .toString()
                         .replaceFirst(
-                            "upload/", "upload/c_fill,f_auto,q_auto,w_180/"),
+                            "upload/", "upload/c_fill,f_auto,q_auto,w_360/"),
                     title: _games[index].title!,
                     publisher: _games[index].publishers.length > 0
                         ? _games[index].publishers[0]!

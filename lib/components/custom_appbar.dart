@@ -8,6 +8,7 @@ class CustomAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      contentPadding: const EdgeInsets.all(0),
       leading: Container(
         child: ClipOval(
           child: Image.asset(

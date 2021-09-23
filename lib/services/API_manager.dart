@@ -16,7 +16,6 @@ class APIManager {
         body: json.encode(config.option));
 
     try {
-      print("Trying to access http");
       var jsonMap = json.decode(response.body);
       onSalesModel = OnSalesModel.fromJson(jsonMap);
       if (onSalesModel.statusCode != 200) {}
