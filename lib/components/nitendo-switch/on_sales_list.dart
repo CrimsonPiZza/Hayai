@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import '../../services/API_manager.dart';
 import '../../services/onsales_request.dart';
 import '../../models/nintendo-switch/onsales.dart';
-import 'dart:convert';
 import '../loading_indicator.dart';
 
 const MONTHS = <int, String>{
@@ -26,13 +26,16 @@ String jsTimeToReadable(dateString) {
   return "${date.year}-${MONTHS[date.month]}-${date.day}";
 }
 
+// Animated List key
+GlobalKey<AnimatedListState> _animatedKey = GlobalKey<AnimatedListState>();
+
 class OnSalesList extends StatefulWidget {
   @override
   _OnSalesListState createState() => _OnSalesListState();
 }
 
 class _OnSalesListState extends State<OnSalesList> {
-  API_Manager api = new API_Manager();
+  APIManager api = new APIManager();
 
   // At the beginning, we fetch the first 20 posts
   int _page = 0;
@@ -48,8 +51,14 @@ class _OnSalesListState extends State<OnSalesList> {
   // Used to display loading indicators when _loadMore function is running
   bool _isLoadMoreRunning = false;
 
+  // Used to display block some actions when _insertListItem() function is running
+  bool _isInsertingToList = false;
+
   // This holds the posts fetched from the server
   List _games = [];
+
+  // The controller for the ListView
+  late ScrollController _scrollController;
 
   void _firstLoad() async {
     setState(() {
@@ -59,18 +68,25 @@ class _OnSalesListState extends State<OnSalesList> {
     final OnSalesModel result = await api
         .getNSOnSales(new NSOnSalesRequestConfig(_page, _limit, _optionID));
     _games = result.data.results;
-    print(JsonEncoder().convert(_games[0].horizontalHeaderImage));
 
     setState(() {
       _isFirstLoadRunning = false;
+      _isInsertingToList = true;
     });
+
+    _insertListItem().then((value) => {
+          setState(() {
+            _isInsertingToList = false;
+          })
+        });
   }
 
   void _loadMore() async {
     if (_hasNextPage &&
         !_isFirstLoadRunning &&
         !_isLoadMoreRunning &&
-        _controller.position.extentAfter < 10) {
+        !_isInsertingToList &&
+        _scrollController.position.extentAfter < 10) {
       setState(() {
         _isLoadMoreRunning = true; // Display a progress indicator at the bottom
       });
@@ -85,20 +101,34 @@ class _OnSalesListState extends State<OnSalesList> {
           _hasNextPage = false;
         });
       }
+
       setState(() {
         _isLoadMoreRunning = false;
+        _isInsertingToList = true;
       });
+
+      _insertListItem().then((value) => {
+            setState(() {
+              _isInsertingToList = false;
+            })
+          });
     }
   }
 
-  // The controller for the ListView
-  late ScrollController _controller;
+  Future<void> _insertListItem() async {
+    // Trigger Animated List
+    _isInsertingToList = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _firstLoad();
-    _controller = new ScrollController()..addListener(_loadMore);
+    int offset = 0;
+    while (offset < _limit && _isInsertingToList) {
+      int indexToInsert = _games.length - _limit + offset;
+      await Future.delayed(Duration(milliseconds: 150), () {
+        if (_isInsertingToList) {
+          _animatedKey.currentState!.insertItem(indexToInsert);
+        }
+      });
+      offset++;
+    }
   }
 
   void switchCategoryFilter() {
@@ -106,198 +136,209 @@ class _OnSalesListState extends State<OnSalesList> {
     _hasNextPage = true;
     _isFirstLoadRunning = false;
     _isLoadMoreRunning = false;
+    _animatedKey = new GlobalKey<AnimatedListState>();
     _games.clear();
+    _firstLoad();
+  }
+
+  void onSelectCategory(option) async {
+    if (_optionID == option) {
+      _scrollController.animateTo(0,
+          duration: Duration(milliseconds: 30 * _games.length),
+          curve: Curves.fastOutSlowIn);
+      return;
+    }
+    setState(() {
+      if (_optionID != option && !_isFirstLoadRunning && !_isLoadMoreRunning) {
+        _isInsertingToList = false;
+        _optionID = option;
+        switchCategoryFilter();
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = new ScrollController()..addListener(_loadMore);
     _firstLoad();
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_loadMore);
+    _scrollController.removeListener(_loadMore);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 32),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 20),
-                    child: Text(
-                      "Let's buy",
-                      textAlign: TextAlign.left,
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w100),
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 20),
-                    child: Text(
-                      "On Sales",
-                      textAlign: TextAlign.left,
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                )
-              ],
-            ),
-          ),
+          PageHeading(),
           // Category Selector
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: BouncingScrollPhysics(),
-              child: Row(
-                children: <Widget>[
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.PRICE_HIGH_TO_LOW,
-                      text: "Price High",
-                    ),
-                    onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.PRICE_HIGH_TO_LOW) {
-                          _optionID = OptionID.PRICE_HIGH_TO_LOW;
-                          switchCategoryFilter();
-                        }
-                      });
-                    },
-                  ),
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.PRICE_LOW_TO_HIGH,
-                      text: "Price Low",
-                    ),
-                    onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.PRICE_LOW_TO_HIGH &&
-                            !_isLoadMoreRunning) {
-                          _optionID = OptionID.PRICE_LOW_TO_HIGH;
-                          switchCategoryFilter();
-                        }
-                      });
-                    },
-                  ),
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.FEATURED,
-                      text: "Featured",
-                    ),
-                    onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.FEATURED &&
-                            !_isLoadMoreRunning) {
-                          _optionID = OptionID.FEATURED;
-                          switchCategoryFilter();
-                        }
-                      });
-                    },
-                  ),
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.A_TO_Z,
-                      text: "Title A-Z",
-                    ),
-                    onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.A_TO_Z &&
-                            !_isLoadMoreRunning) {
-                          _optionID = OptionID.A_TO_Z;
-                          switchCategoryFilter();
-                        }
-                      });
-                    },
-                  ),
-                  GestureDetector(
-                    child: CategoryCard(
-                      selectedOptionID: _optionID,
-                      btnOptionID: OptionID.Z_TO_A,
-                      text: "Title Z-A",
-                    ),
-                    onTap: () {
-                      setState(() {
-                        if (_optionID != OptionID.Z_TO_A &&
-                            !_isLoadMoreRunning) {
-                          _optionID = OptionID.Z_TO_A;
-                          switchCategoryFilter();
-                        }
-                      });
-                    },
-                  )
-                ],
+          CategorySelector(),
+          // Do not show listview yet, unless first loading is already done
+          DisplayZone(),
+          // Make the loading indicator centering the screen at first
+          LoadingIndicator()
+        ],
+      ),
+    );
+  }
+
+  Widget LoadingIndicator() {
+    return _isFirstLoadRunning
+        ? Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: ZenitsuLoadingIndicator(),
+            ),
+          )
+        // Add the loading indicator at the bottom center of the screen when loading more games
+        : _isLoadMoreRunning
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: ZenitsuLoadingIndicator(),
+                ),
+              )
+            : SizedBox.shrink();
+  }
+
+  Expanded DisplayZone() {
+    return Expanded(
+      flex: _isFirstLoadRunning ? 0 : 1,
+      child: AnimatedList(
+        shrinkWrap: true,
+        controller: _scrollController,
+        padding: EdgeInsets.only(bottom: 20),
+        physics: BouncingScrollPhysics(),
+        scrollDirection: Axis.vertical,
+        key: _animatedKey,
+        initialItemCount: 0,
+        itemBuilder:
+            (BuildContext context, int index, Animation<double> animation) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: _GameList(
+              thumbnail: _games[index]
+                  .horizontalHeaderImage
+                  .toString()
+                  .replaceFirst(
+                      "upload/", "upload/c_fill,f_auto,q_auto,w_360/"),
+              title: _games[index].title!,
+              publisher: _games[index].publishers.length > 0
+                  ? _games[index].publishers[0]!
+                  : _games[index].developers.length > 0
+                      ? _games[index].developers[0]!
+                      : "",
+              price: double.parse(_games[index].msrp.toString()),
+              salePrice: double.parse(_games[index].salePrice.toString()),
+              date: jsTimeToReadable(_games[index].releaseDateDisplay),
+              animation: animation,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Padding CategorySelector() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: BouncingScrollPhysics(),
+        child: Row(
+          children: <Widget>[
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.PRICE_HIGH_TO_LOW,
+                text: "Price High",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.PRICE_HIGH_TO_LOW);
+              },
+            ),
+            GestureDetector(
+                child: CategoryCard(
+                  selectedOptionID: _optionID,
+                  btnOptionID: OptionID.PRICE_LOW_TO_HIGH,
+                  text: "Price Low",
+                ),
+                onTap: () {
+                  onSelectCategory(OptionID.PRICE_LOW_TO_HIGH);
+                }),
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.FEATURED,
+                text: "Featured",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.FEATURED);
+              },
+            ),
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.A_TO_Z,
+                text: "Title A-Z",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.A_TO_Z);
+              },
+            ),
+            GestureDetector(
+              child: CategoryCard(
+                selectedOptionID: _optionID,
+                btnOptionID: OptionID.Z_TO_A,
+                text: "Title Z-A",
+              ),
+              onTap: () {
+                onSelectCategory(OptionID.A_TO_Z);
+              },
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Padding PageHeading() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: Text(
+                "Let's buy",
+                textAlign: TextAlign.left,
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w100),
               ),
             ),
           ),
-          // Do not show listview yet, unless first loading is already done
-          _isFirstLoadRunning
-              ? SizedBox.shrink()
-              : Expanded(
-                  child: ListView.builder(
-                    controller: _controller,
-                    padding: EdgeInsets.only(bottom: 20),
-                    physics: BouncingScrollPhysics(),
-                    scrollDirection: Axis.vertical,
-                    itemCount: _games.length,
-                    itemBuilder: (BuildContext context, int index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: _GameList(
-                          thumbnail: _games[index]
-                              .horizontalHeaderImage
-                              .toString()
-                              .replaceFirst("upload/",
-                                  "upload/c_fill,f_auto,q_auto,w_360/"),
-                          title: _games[index].title!,
-                          publisher: _games[index].publishers.length > 0
-                              ? _games[index].publishers[0]!
-                              : _games[index].developers.length > 0
-                                  ? _games[index].developers[0]!
-                                  : "",
-                          price: double.parse(_games[index].msrp.toString()),
-                          salePrice:
-                              double.parse(_games[index].salePrice.toString()),
-                          date: jsTimeToReadable(
-                              _games[index].releaseDateDisplay),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-          // Make the loading indicator centering the screen at first
-          _isFirstLoadRunning
-              ? Expanded(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: ZenitsuLoadingIndicator(),
-                  ),
-                )
-              // Add the loading indicator at the bottom center of the screen when loading more games
-              : _isLoadMoreRunning
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Center(
-                        child: ZenitsuLoadingIndicator(),
-                      ),
-                    )
-                  : SizedBox.shrink()
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: Text(
+                "On Sales",
+                textAlign: TextAlign.left,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+          )
         ],
       ),
     );
@@ -307,9 +348,9 @@ class _OnSalesListState extends State<OnSalesList> {
 class CategoryCard extends StatelessWidget {
   const CategoryCard({
     Key? key,
-    required int this.selectedOptionID,
-    required int this.btnOptionID,
-    required String this.text,
+    required this.selectedOptionID,
+    required this.btnOptionID,
+    required this.text,
   }) : super(key: key);
 
   final int selectedOptionID;
@@ -354,6 +395,7 @@ class _GameList extends StatelessWidget {
     required this.price,
     required this.salePrice,
     required this.date,
+    required this.animation,
   }) : super(key: key);
 
   final String thumbnail;
@@ -362,40 +404,48 @@ class _GameList extends StatelessWidget {
   final double price;
   final double salePrice;
   final String date;
+  final Animation<double> animation;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
-      child: Container(
-        child: SizedBox(
-          height: 96,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: thumbnail != "null"
-                      ? Image.network(
-                          thumbnail,
-                          width: 170,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.asset(
-                          "assets/images/nintendo_thumbnail.png",
-                          width: 170,
-                          fit: BoxFit.cover,
-                        ),
+    return SlideTransition(
+      position: CurvedAnimation(curve: Curves.easeOut, parent: animation)
+          .drive((Tween<Offset>(
+        begin: Offset(1, 0),
+        end: Offset(0, 0),
+      ))),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
+        child: Container(
+          child: SizedBox(
+            height: 96,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: thumbnail != "null"
+                        ? Image.network(
+                            thumbnail,
+                            width: 170,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.asset(
+                            "assets/images/nintendo_thumbnail.png",
+                            width: 170,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
                 ),
-              ),
-              _GameCard(
-                  title: title,
-                  publisher: publisher,
-                  price: price,
-                  salePrice: salePrice,
-                  date: date)
-            ],
+                _GameCard(
+                    title: title,
+                    publisher: publisher,
+                    price: price,
+                    salePrice: salePrice,
+                    date: date)
+              ],
+            ),
           ),
         ),
       ),

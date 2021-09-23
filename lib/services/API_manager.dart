@@ -4,7 +4,7 @@ import '../constants/nintendo-switch/onsales_strings.dart';
 import '../models/nintendo-switch/onsales.dart';
 import './onsales_request.dart';
 
-class API_Manager {
+class APIManager {
   Future<OnSalesModel> getNSOnSales(NSOnSalesRequestConfig config) async {
     var client = http.Client();
     var onSalesModel = null;
@@ -16,7 +16,6 @@ class API_Manager {
         body: json.encode(config.option));
 
     try {
-      print("Trying to access http");
       var jsonMap = json.decode(response.body);
       onSalesModel = OnSalesModel.fromJson(jsonMap);
       if (onSalesModel.statusCode != 200) {}
